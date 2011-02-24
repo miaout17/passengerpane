@@ -59,15 +59,26 @@ class ConfigInstaller
   def create_vhost_conf(index)
     app = @data[index]
     public_dir = File.join(app['path'], 'public')
-    vhost = [
-      "<VirtualHost #{app['vhostname']}>",
+    statements = [ "<VirtualHost #{app['vhostname']}>" ]
+
+    if app['ssl']
+      statements += [
+        "  SSLEngine on",
+        "  SSLCertificateFile /etc/apache2/server.cert",
+        "  SSLCertificateKeyFile /etc/apache2/server.key"
+      ]
+    end
+
+    statements += [
       "  ServerName #{app['host']}",
       ("  ServerAlias #{app['aliases']}" unless app['aliases'].empty?),
       "  DocumentRoot \"#{public_dir}\"",
       "  #{app['app_type'].capitalize}Env #{app['environment']}",
       (app['user_defined_data'] unless app['user_defined_data'].empty?),
       "</VirtualHost>"
-    ].compact.join("\n")
+    ]
+
+    vhost = statements.compact.join("\n")
     
     OSX::NSLog("Will write vhost file: #{app['config_path']}\nData: #{vhost}")
     File.open(app['config_path'].bypass_safe_level_1, 'w') { |f| f << vhost }

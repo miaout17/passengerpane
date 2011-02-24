@@ -16,6 +16,9 @@ class PassengerApplication < NSObject
   
   DEVELOPMENT = 0
   PRODUCTION = 1
+
+  HTTP = 0
+  HTTPS = 1
   
   class << self
     include SharedPassengerBehaviour
@@ -60,18 +63,25 @@ class PassengerApplication < NSObject
     end
   end
   
-  kvc_accessor :host, :path, :aliases, :dirty, :valid, :revertable, :environment
-  attr_accessor :user_defined_data, :vhostname
-  
+  kvc_accessor :host, :path, :aliases, :dirty, :valid, :revertable, :environment, :protocol
+  attr_accessor :user_defined_data
+
+  def vhostname
+    self.ssl? ? "*:443" : "*:80"
+  end
+
+  def ssl?
+    self.protocol == HTTPS
+  end
+
   def init
     if super_init
       @environment = DEVELOPMENT
+      @protocol = HTTP
       
       @new_app = true
       @dirty = @valid = @revertable = false
       @host, @path, @aliases, @user_defined_data = '', '', '', ''
-      @vhostname = '*:80'
-      
       set_original_values!
       self
     end
@@ -203,7 +213,8 @@ class PassengerApplication < NSObject
       'aliases' => @aliases.to_s,
       'path' => @path.to_s,
       'environment' => (@environment.nil? ? @custom_environment : (@environment == DEVELOPMENT ? 'development' : 'production')),
-      'vhostname' => @vhostname,
+      'vhostname' => self.vhostname,
+      'ssl' => ssl?,
       'user_defined_data' => @user_defined_data
     }
   end
@@ -240,9 +251,12 @@ class PassengerApplication < NSObject
       self.environment = nil
       @custom_environment = $2
     end
-    
+
+    data.gsub!(/\n\s*SSL(Engine|Certificate).*/, '')
+
     data.gsub!(/<VirtualHost\s(.+?)>/, '')
-    self.vhostname = $1
+    @protocol = ( ($1 == "*:443") ? HTTPS : HTTP )
+    # @protocol = HTTP
     
     data.gsub!(/\s*<\/VirtualHost>\n*/, '').gsub!(/^\n*/, '')
     @user_defined_data = data
